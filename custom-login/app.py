@@ -39,12 +39,10 @@ def load_user(user_id):
 def login():
     bu = config['issuer'].split('/oauth2')[0]
     cid = config['client_id']
-
-    return render_template("login.html",
-                           baseUri=bu,
-                           clientId=cid,
-                           state=APP_STATE,
-                           nonce=NONCE)
+    issuer = config['issuer']
+    redirect_uri = config['redirect_uri']
+    return render_template(
+        "login.html", baseUri=bu, clientId=cid, issuer=issuer, redirect_uri=redirect_uri, state=APP_STATE, nonce=NONCE)
 
 @app.route("/profile")
 @login_required

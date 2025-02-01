@@ -3,21 +3,27 @@
 {% block content %}
 <div id="sign-in-widget"></div>
 <script type="text/javascript">
-  new OktaSignIn({
+  var signIn = new OktaSignIn({
     baseUrl: "{{baseUri}}",
+    issuer: "{{issuer}}",
     clientId: "{{clientId}}",
-    redirectUri: "http://localhost:8080",
+    redirectUri: "{{redirect_uri}}",
     logo: './static/oph.png',
+    state: '{{state}}',
     authParams: {
       issuer: "{{baseUri}}",
+      pkce: false,
+      cookies: {secure: false},
       responseType: 'code',
       state: '{{state}}',
       scopes: ['openid', 'profile', 'email'],
       nonce: '{{nonce}}'
     }
-  }).renderEl(
-    { el: '#sign-in-widget' },
-    function (res) {}
-  );
+  }
+);
+signIn.renderEl(
+  { el: '#sign-in-widget' },
+  function (res) {}
+);
 </script>
 {% endblock content %}
