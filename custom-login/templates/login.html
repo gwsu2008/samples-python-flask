@@ -6,13 +6,12 @@
   new OktaSignIn({
     baseUrl: "{{baseUri}}",
     clientId: "{{clientId}}",
-    redirectUri: "http://localhost:8080/authorization-code/callback",
-    logo: 'http://flask.pocoo.org/static/logo/flask.png',
+    redirectUri: "http://localhost:8080",
+    logo: './static/oph.png',
     authParams: {
-      issuer: "{{baseUri}}/oauth2/default",
+      issuer: "{{baseUri}}",
       responseType: 'code',
       state: '{{state}}',
-      display: 'page',
       scopes: ['openid', 'profile', 'email'],
       nonce: '{{nonce}}'
     }

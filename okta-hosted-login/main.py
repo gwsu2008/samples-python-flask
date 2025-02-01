@@ -1,6 +1,9 @@
 import requests
-
-from flask import Flask, render_template, redirect, request, url_for
+import secrets
+import base64
+import hashlib
+from flask_cors import CORS
+from flask import Flask, render_template, redirect, request, session, url_for
 from flask_login import (
     LoginManager,
     current_user,
@@ -12,16 +15,12 @@ from flask_login import (
 from helpers import is_access_token_valid, is_id_token_valid, config
 from user import User
 
-
 app = Flask(__name__)
-app.config.update({'SECRET_KEY': ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=32))})
+app.config.update({'SECRET_KEY': secrets.token_hex(64)})
+CORS(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-
-
-APP_STATE = 'ApplicationState'
-NONCE = 'SampleNonce'
 
 
 @login_manager.user_loader
@@ -36,12 +35,22 @@ def home():
 
 @app.route("/login")
 def login():
+    # store app state and code verifier in session
+    session['app_state'] = secrets.token_urlsafe(64)
+    session['code_verifier'] = secrets.token_urlsafe(64)
+
+    # calculate code challenge
+    hashed = hashlib.sha256(session['code_verifier'].encode('ascii')).digest()
+    encoded = base64.urlsafe_b64encode(hashed)
+    code_challenge = encoded.decode('ascii').strip('=')
+
     # get request params
     query_params = {'client_id': config["client_id"],
                     'redirect_uri': config["redirect_uri"],
                     'scope': "openid email profile",
-                    'state': APP_STATE,
-                    'nonce': NONCE,
+                    'state': session['app_state'],
+                    'code_challenge': code_challenge,
+                    'code_challenge_method': 'S256',
                     'response_type': 'code',
                     'response_mode': 'query'}
 
@@ -64,11 +73,15 @@ def profile():
 def callback():
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     code = request.args.get("code")
+    app_state = request.args.get("state")
+    if app_state != session['app_state']:
+        return "The app state doesn't match"
     if not code:
-        return "The code was not returned or is not accessible", 403
+            return "The code wasn't returned or isn't accessible", 403
     query_params = {'grant_type': 'authorization_code',
                     'code': code,
-                    'redirect_uri': request.base_url
+                    'redirect_uri': request.base_url,
+                    'code_verifier': session['code_verifier'],
                     }
     query_params = requests.compat.urlencode(query_params)
     exchange = requests.post(
@@ -80,19 +93,13 @@ def callback():
 
     # Get tokens and validate
     if not exchange.get("token_type"):
-        return "Unsupported token type. Should be 'Bearer'.", 403
+            return "Unsupported token type. Should be 'Bearer'.", 403
     access_token = exchange["access_token"]
     id_token = exchange["id_token"]
 
-    if not is_access_token_valid(access_token, config["issuer"]):
-        return "Access token is invalid", 403
-
-    if not is_id_token_valid(id_token, config["issuer"], config["client_id"], NONCE):
-        return "ID token is invalid", 403
-
-    # Authorization flow successful, get userinfo and login user
-    userinfo_response = requests.get(config["userinfo_uri"],
-                                     headers={'Authorization': f'Bearer {access_token}'}).json()
+    # Authorization flow successful, get userinfo and sign in user
+    userinfo_response = requests.get(
+        config["userinfo_uri"], headers={'Authorization': f'Bearer {access_token}'}).json()
 
     unique_id = userinfo_response["sub"]
     user_email = userinfo_response["email"]
@@ -118,4 +125,4 @@ def logout():
 
 
 if __name__ == '__main__':
-    app.run(host="localhost", port=8080, debug=True)
+    app.run(host="localhost", port=8181, debug=True)
